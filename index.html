@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Camera Example</title>
+    <title>Camera </title>
     <style>
         video {
             width: 100%;
@@ -13,11 +13,6 @@
             padding: 10px;
             margin: 10px;
             display: inline-block;
-        }
-        .passport-frame {
-            width: 200px;
-            height: 250px;
-            overflow: hidden;
         }
     </style>
 </head>
@@ -35,7 +30,7 @@
         <button id="use-camera-again-button" style="display: none;">Use Camera Again</button>
         <button id="rotate-camera-button" style="display: none;">Rotate Camera</button>
     </div>
-    <div id="frame-container"></div> <!-- Container for the captured pictures -->
+    <div id="frame-container"></div> <!-- Container for the captured pictures and videos -->
 
     <script>
         const videoElement = document.getElementById("camera-feed");
@@ -69,7 +64,7 @@
         });
 
         captureImageButton.addEventListener("click", () => {
-            takePictureWithFaceDetection();
+            takePicture();
         });
 
         chooseImageButton.addEventListener("click", () => {
@@ -105,8 +100,8 @@
                 console.error("Error accessing the camera:", error);
             }
         }
-
-        async function takePictureWithFaceDetection() {
+        
+        async function takePicture() {
             try {
                 if (!videoElement.srcObject) {
                     console.error("Camera feed is not active.");
@@ -116,39 +111,17 @@
                 const mediaStreamTrack = videoElement.srcObject.getVideoTracks()[0];
                 const imageCapture = new ImageCapture(mediaStreamTrack);
 
-                const blob = await imageCapture.takePhoto();
+                const imageSettings = { width: 200, height: 250 }; // Adjust these dimensions as needed
+                const blob = await imageCapture.takePhoto(imageSettings);
                 const imageURL = URL.createObjectURL(blob);
-
-                // Perform face detection using face-api.js
-                const image = new Image();
-                image.src = imageURL;
-
-                // Initialize face-api.js
-                const canvas = faceapi.createCanvasFromMedia(image);
-                const displaySize = { width: image.width, height: image.height };
-                faceapi.matchDimensions(canvas, displaySize);
-
-                // Detect faces
-                const detections = await faceapi.detectAllFaces(image).withFaceLandmarks().withFaceDescriptors();
-                const resizedCanvas = faceapi.createCanvasFromMedia(image);
-                faceapi.matchDimensions(resizedCanvas, displaySize);
-
-                // Crop and resize the image to fit the passport size frame
-                detections.forEach((detection) => {
-                    const resizedDetections = faceapi.resizeResults(detection, displaySize);
-                    const ctx = resizedCanvas.getContext("2d");
-                    ctx.drawImage(image, resizedDetections.detection.box.x, resizedDetections.detection.box.y, 200, 250, 0, 0, 200, 250);
-                });
-
-                const finalImageURL = resizedCanvas.toDataURL();
 
                 const frame = document.createElement("div");
                 frame.className = "image-frame";
 
-                const finalImage = document.createElement("img");
-                finalImage.src = finalImageURL;
+                const image = document.createElement("img");
+                image.src = imageURL;
 
-                frame.appendChild(finalImage);
+                frame.appendChild(image);
                 frameContainer.appendChild(frame);
 
                 // Hide the video element
@@ -160,7 +133,13 @@
                 useCameraAgainButton.style.display = "block";
                 // Hide the "Rotate Camera" button
                 rotateCameraButton.style.display = "none";
-                
+
+                // Resize the image to fit the passport size frame
+                const passportFrame = document.createElement("div");
+                passportFrame.className = "passport-frame";
+                passportFrame.appendChild(image.cloneNode());
+                frameContainer.appendChild(passportFrame);
+
                 // Hide the image frame after capturing
                 frame.style.display = "none";
             } catch (error) {
