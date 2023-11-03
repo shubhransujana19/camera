@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Example</title>
+    <style>
+        video {
+            width: 100%;
+            max-width: 640px;
+            display: none;
+        }
+        .image-frame {
+            border: 2px solid #333;
+            padding: 10px;
+            margin: 10px;
+            display: inline-block;
+        }
+        .passport-frame {
+            width: 200px;
+            height: 250px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <h1>Camera Example</h1>
+    <div id="initial-options">
+        <button id="camera-option">Use Camera</button>
+        <button id="file-option">Choose from Device</button>
+    </div>
+    <input type="file" accept="image/*" id="choose-image-input" style="display: none;">
+    <video id="camera-feed" autoplay playsinline></video>
+    <div id="capture-options" style="display: none;">
+        <button id="capture-image-button">Capture Image</button>
+        <button id="choose-image-button">Choose from Device</button>
+        <button id="use-camera-again-button" style="display: none;">Use Camera Again</button>
+        <button id="rotate-camera-button" style="display: none;">Rotate Camera</button>
+    </div>
+    <div id="frame-container"></div> <!-- Container for the captured pictures -->
+
+    <script>
+        const videoElement = document.getElementById("camera-feed");
+        const initialOptions = document.getElementById("initial-options");
+        const cameraOptionButton = document.getElementById("camera-option");
+        const fileOptionButton = document.getElementById("file-option");
+        const captureOptions = document.getElementById("capture-options");
+        const captureImageButton = document.getElementById("capture-image-button");
+        const chooseImageButton = document.getElementById("choose-image-button");
+        const chooseImageInput = document.getElementById("choose-image-input");
+        const frameContainer = document.getElementById("frame-container");
+        const useCameraAgainButton = document.getElementById("use-camera-again-button");
+        const rotateCameraButton = document.getElementById("rotate-camera-button");
+
+        let currentCamera = 'environment'; // 'environment' for rear camera, 'user' for front camera
+
+        cameraOptionButton.addEventListener("click", () => {
+            initialOptions.style.display = "none"; // Hide the initial options
+            captureOptions.style.display = "block"; // Show the capture options
+            useCameraAgainButton.style.display = "none"; // Hide the "Use Camera Again" button
+            rotateCameraButton.style.display = "block"; // Show the "Rotate Camera" button
+            startCamera();
+        });
+
+        fileOptionButton.addEventListener("click", () => {
+            initialOptions.style.display = "none"; // Hide the initial options
+            captureOptions.style.display = "block"; // Show the capture options
+            useCameraAgainButton.style.display = "none"; // Hide the "Use Camera Again" button
+            rotateCameraButton.style.display = "none"; // Hide the "Rotate Camera" button
+            chooseImageInput.click();
+        });
+
+        captureImageButton.addEventListener("click", () => {
+            takePictureWithFaceDetection();
+        });
+
+        chooseImageButton.addEventListener("click", () => {
+            chooseImageInput.click();
+        });
+
+        chooseImageInput.addEventListener("change", (event) => {
+            const selectedFile = event.target.files[0];
+            if (selectedFile) {
+                displaySelectedImage(selectedFile);
+                useCameraAgainButton.style.display = "block"; // Show the "Use Camera Again" button
+                captureOptions.style.display = "block"; // Show the capture options
+                rotateCameraButton.style.display = "none"; // Hide the "Rotate Camera" button
+            }
+        });
+
+        useCameraAgainButton.addEventListener("click", () => {
+            useCameraAgainButton.style.display = "none"; // Hide the "Use Camera Again" button
+            startCamera();
+        });
+
+        rotateCameraButton.addEventListener("click", () => {
+            rotateCamera();
+        });
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentCamera } });
+                videoElement.srcObject = stream;
+                videoElement.style.display = "block"; // Show the video element
+                rotateCameraButton.style.display = "block"; // Show the "Rotate Camera" button
+            } catch (error) {
+                console.error("Error accessing the camera:", error);
+            }
+        }
+
+        async function takePictureWithFaceDetection() {
+            try {
+                if (!videoElement.srcObject) {
+                    console.error("Camera feed is not active.");
+                    return;
+                }
+
+                const mediaStreamTrack = videoElement.srcObject.getVideoTracks()[0];
+                const imageCapture = new ImageCapture(mediaStreamTrack);
+
+                const blob = await imageCapture.takePhoto();
+                const imageURL = URL.createObjectURL(blob);
+
+                // Perform face detection using face-api.js
+                const image = new Image();
+                image.src = imageURL;
+
+                // Initialize face-api.js
+                const canvas = faceapi.createCanvasFromMedia(image);
+                const displaySize = { width: image.width, height: image.height };
+                faceapi.matchDimensions(canvas, displaySize);
+
+                // Detect faces
+                const detections = await faceapi.detectAllFaces(image).withFaceLandmarks().withFaceDescriptors();
+                const resizedCanvas = faceapi.createCanvasFromMedia(image);
+                faceapi.matchDimensions(resizedCanvas, displaySize);
+
+                // Crop and resize the image to fit the passport size frame
+                detections.forEach((detection) => {
+                    const resizedDetections = faceapi.resizeResults(detection, displaySize);
+                    const ctx = resizedCanvas.getContext("2d");
+                    ctx.drawImage(image, resizedDetections.detection.box.x, resizedDetections.detection.box.y, 200, 250, 0, 0, 200, 250);
+                });
+
+                const finalImageURL = resizedCanvas.toDataURL();
+
+                const frame = document.createElement("div");
+                frame.className = "image-frame";
+
+                const finalImage = document.createElement("img");
+                finalImage.src = finalImageURL;
+
+                frame.appendChild(finalImage);
+                frameContainer.appendChild(frame);
+
+                // Hide the video element
+                videoElement.style.display = "none";
+                videoElement.pause();
+                videoElement.srcObject.getTracks().forEach(track => track.stop());
+
+                // Show the "Use Camera Again" button
+                useCameraAgainButton.style.display = "block";
+                // Hide the "Rotate Camera" button
+                rotateCameraButton.style.display = "none";
+                
+                // Hide the image frame after capturing
+                frame.style.display = "none";
+            } catch (error) {
+                console.error("Error taking a photo:", error);
+            }
+        }
+
+        function displaySelectedImage(file) {
+            const imageURL = URL.createObjectURL(file);
+
+            const frame = document.createElement("div");
+            frame.className = "image-frame";
+
+            const image = document.createElement("img");
+            image.src = imageURL;
+
+            frame.appendChild(image);
+            frameContainer.appendChild(frame);
+        }
+
+        function rotateCamera() {
+            // Toggle between 'environment' (rear camera) and 'user' (front camera)
+            currentCamera = currentCamera === 'environment' ? 'user' : 'environment';
+
+            // Stop the current camera feed and start the new camera feed
+            videoElement.srcObject.getTracks().forEach(track => track.stop());
+            startCamera();
+        }
+    </script>
+</body>
+</html>
